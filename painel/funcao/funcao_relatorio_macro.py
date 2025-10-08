@@ -9,6 +9,8 @@ import re
 from wordcloud import WordCloud, STOPWORDS
 import json
 import unicodedata
+from html import escape
+
 
 
 # --- helpers ---
@@ -325,7 +327,7 @@ def app_funcao_objetos(base_filtrada):
         x="count",
         y="objeto_fmt",
         orientation="h",
-        text=top10["count"].map(lambda v: f"{v}"),
+        text=top10.apply(lambda r: f"{r['count']} ({r['percent']:.1f}%)", axis=1),
         labels={"count": "Quantidade", "objeto_fmt": "Objeto"},
         title="Top 10 objetos detectados na imagem",
         color_discrete_sequence=["#213ac7"],
@@ -429,12 +431,12 @@ def app_funcao_hashtags(base_filtrada):
 
 def app_funcao_cor_predominantes_dia(base_filtrada: pd.DataFrame, tz: str = "America/Sao_Paulo"):
     """
-    Cores dominantes por dia (composição %).
+    Cores dominantes por dia (composição %), ordenadas do maior para o menor.
     - Consolida categorias e sinônimos/variações:
       azul, multicolored, verde, amarelo, bege, branco, preto, unknown, rosa,
       vermelho, marrom, laranja, cinza, floral, multicolor, colorido, multi,
       multicolorido, roxo, pink, multi_colorido...
-    - 'não identificado' aparece em preto com textura.
+    - 'não identificado' aparece com hatch (textura) no gráfico.
     Requer colunas: 'post_date' (UTC/ISO) e 'imagem_cor_dominante'.
     """
 
@@ -481,26 +483,24 @@ def app_funcao_cor_predominantes_dia(base_filtrada: pd.DataFrame, tz: str = "Ame
         "marrom"       : "#8c564b",
         "cinza"        : "#7f7f7f",
         "branco"       : "#e5e5e5",
-        "bege"         : "#D2B48C",   # beige/tan
+        "bege"         : "#D2B48C",
         "multicolorida": "#17becf",
         "não identificado": "#000000",
     }
 
     def _norm_text(s: str) -> str:
-        # lower + tirar acentos + trocar '_' por espaço + strip
         s = (s or "").lower().replace("_", " ").strip()
         s = "".join(ch for ch in unicodedata.normalize("NFD", s) if not unicodedata.combining(ch))
         return s
 
     def _consolida_cor(raw: str) -> str:
         x = _norm_text(raw)
-        if x in ("", "none", "null"):          # vazios
+        if x in ("", "none", "null"):
             return "não identificado"
-        if x in NORMALIZA:                      # mapeamento direto
+        if x in NORMALIZA:
             return NORMALIZA[x]
-        if x in FINAL_CLASSES:                  # já é uma classe final
+        if x in FINAL_CLASSES:
             return x
-        # tentativa extra: se começar com 'multi' considerar multicolorida
         if x.startswith("multi"):
             return "multicolorida"
         return "não identificado"
@@ -518,16 +518,31 @@ def app_funcao_cor_predominantes_dia(base_filtrada: pd.DataFrame, tz: str = "Ame
         st.info("Todas as cores foram classificadas como 'não identificado'. Verifique os rótulos de origem.")
         return
 
-    # ---------- agregação e % ----------
+    # ---------- agregação e % por dia ----------
     g = df.groupby(["dia", "cor_cat"]).size().reset_index(name="count")
     g["percent"] = g["count"] / g.groupby("dia")["count"].transform("sum") * 100
-
-    # padrão (hatch) apenas para 'não identificado'
     g["padrao"] = g["cor_cat"].map(lambda c: "desconhecida" if c == "não identificado" else "normal")
+
+    # ---------- ORDENAR DO MAIOR PARA O MENOR ----------
+    # calculamos o percentual médio global por cor para definir a ordem
+    ordem_global = (
+        g.groupby("cor_cat")["percent"]
+         .mean()
+         .sort_values(ascending=False)
+         .index.tolist()
+    )
+
+    # Garantir que todas as cores do COLOR_MAP apareçam no final se inexistentes
+    for cor in COLOR_MAP.keys():
+        if cor not in ordem_global:
+            ordem_global.append(cor)
+
+    # Reordena o DataFrame por dia e percent (desc) só para consistência visual interna
+    g = g.sort_values(["dia", "percent"], ascending=[True, False])
 
     # ---------- gráfico ----------
     fig = px.bar(
-        g.sort_values(["dia", "percent"], ascending=[True, False]),
+        g,
         x="dia",
         y="percent",
         color="cor_cat",
@@ -535,6 +550,7 @@ def app_funcao_cor_predominantes_dia(base_filtrada: pd.DataFrame, tz: str = "Ame
         labels={"dia": "Dia", "percent": "% do dia", "cor_cat": "Cor"},
         title="Cores predominantes por dia (composição %)",
         color_discrete_map=COLOR_MAP,
+        category_orders={"cor_cat": ordem_global},  # <- ordena do maior para menor
         pattern_shape="padrao",
         pattern_shape_map={"normal": "", "desconhecida": "x"},
     )
@@ -968,144 +984,139 @@ def etapa_filtro_contexto_farm(base_filtrada: pd.DataFrame):
 
     return df_filtrado
 
+
+
+import pandas as pd
+import streamlit as st
+from html import escape
+
 def _is_http_url(x: str) -> bool:
     try:
-        s = str(x).strip()
-        return s.startswith(("http://", "https://"))
+        return isinstance(x, str) and x.startswith(("http://", "https://"))
     except Exception:
         return False
 
-def mostrar_imagem_exemplo(
+def mosaico_imagens(
     df: pd.DataFrame,
     thumb_col: str = "thumbnail",
     tz: str = "America/Sao_Paulo",
-    ordem: str = "Mais recentes",     # "Mais recentes" | "Mais antigos" | "Sem ordenação"
-    escolha: str = "Primeiro",        # "Primeiro" | "Aleatório"
-    titulo: str = "🖼️ Imagem de exemplo"
+    key: str = "mosaico_main",
+    ordenar: str = "Mais recentes",      # "Mais recentes" | "Mais antigos" | "Sem ordenação"
+    mostrar_legenda: bool = True,         # usa a coluna 'caption'
+    abrir_nova_aba: bool = True,
+    colunas: int = 5,                     # nº de colunas no mosaico
+    por_pagina: int = 40,                 # nº máx de imagens por página
+    proporcao: str = "1 / 1",             # aspect-ratio opcional apenas p/ placeholder
 ):
-    if thumb_col not in df.columns:
-        st.warning(f"Coluna '{thumb_col}' não encontrada.")
-        return None
-
-    data = df.copy()
-    if "post_date" in data.columns:
-        data["post_date"] = pd.to_datetime(data["post_date"], errors="coerce", utc=True)
-        data["post_date_local"] = data["post_date"].dt.tz_convert(tz)
-        data["data_legenda"] = data["post_date_local"].dt.strftime("%d/%m/%Y %H:%M")
-    else:
-        data["data_legenda"] = ""
-
-    data = (data[data[thumb_col].apply(_is_http_url)]
-            .drop_duplicates(subset=[thumb_col])
-            .reset_index(drop=True))
-    if data.empty:
-        st.info("Nenhuma imagem válida para o exemplo.")
-        return None
-
-    if ordem != "Sem ordenação" and "post_date" in data.columns:
-        data = data.sort_values("post_date", ascending=(ordem == "Mais antigos"))
-
-    row = data.sample(1).iloc[0] if escolha == "Aleatório" else data.iloc[0]
-    url = row[thumb_col]
-
-    cap_parts = []
-    if row.get("data_legenda"):
-        cap_parts.append(row["data_legenda"])
-    if "post_type" in row and isinstance(row["post_type"], str):
-        cap_parts.append(row["post_type"])
-    caption = " • ".join(cap_parts) if cap_parts else None
-
-    st.subheader(titulo)
-    st.image(url, caption=caption, use_container_width=True)  # << corrigido
-    st.markdown(f"[Abrir imagem]({url})")
-
-    return url
-
-
-def carrossel_imagens(
-    df: pd.DataFrame,
-    thumb_col: str = "thumbnail",
-    tz: str = "America/Sao_Paulo",
-    key: str = "carousel_main",
-    ordenar: str = "Mais recentes",
-    mostrar_legenda: bool = True,
-    mostrar_exemplo: bool = True,
-    exemplo_escolha: str = "Primeiro",   # ou "Aleatório"
-):
-    st.subheader("🎞️ Carrossel de Imagens")
+    st.subheader("🧩 Mosaico de Imagens")
 
     if thumb_col not in df.columns:
         st.warning(f"Coluna '{thumb_col}' não encontrada.")
         return
 
     data = df.copy()
+
+    # Datas (mantidas caso queira ordenar por data)
     if "post_date" in data.columns:
         data["post_date"] = pd.to_datetime(data["post_date"], errors="coerce", utc=True)
-        data["post_date_local"] = data["post_date"].dt.tz_convert(tz)
-        data["data_legenda"] = data["post_date_local"].dt.strftime("%d/%m/%Y %H:%M")
-    else:
-        data["data_legenda"] = ""
-
-    data = data[data[thumb_col].apply(_is_http_url)].drop_duplicates(subset=[thumb_col]).reset_index(drop=True)
+        try:
+            data["post_date_local"] = data["post_date"].dt.tz_convert(tz)
+        except Exception:
+            data["post_date_local"] = data["post_date"]
+    # Apenas URLs válidas e únicas
+    data = (
+        data[data[thumb_col].apply(_is_http_url)]
+        .drop_duplicates(subset=[thumb_col])
+        .reset_index(drop=True)
+    )
     if data.empty:
         st.info("Nenhuma imagem válida para exibir.")
         return
 
+    # Ordenação
     if ordenar != "Sem ordenação" and "post_date" in data.columns:
         data = data.sort_values("post_date", ascending=(ordenar == "Mais antigos"))
 
+    # Controles
+    c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.0, 1.0])
+    with c1:
+        ord_sel = st.selectbox(
+            "Ordenar por",
+            ["Mais recentes", "Mais antigos", "Sem ordenação"],
+            index=["Mais recentes","Mais antigos","Sem ordenação"].index(ordenar),
+            key=f"{key}_order",
+        )
+    with c2:
+        mostrar_legenda = st.checkbox("Mostrar legendas (caption)", value=mostrar_legenda, key=f"{key}_legend")
+    with c3:
+        colunas = st.number_input("Colunas", 2, 10, value=colunas, step=1, key=f"{key}_cols")
+    with c4:
+        por_pagina = st.number_input("Por página", 10, 200, value=por_pagina, step=10, key=f"{key}_pp")
+
+    if ord_sel != ordenar:
+        st.session_state.pop(f"{key}_page", None)
+        st.rerun()
+
     total = len(data)
-    idx_key = f"{key}_idx"
-    if idx_key not in st.session_state:
-        st.session_state[idx_key] = 0
+    total_paginas = max(1, (total + por_pagina - 1) // por_pagina)
+    page = st.session_state.get(f"{key}_page", 1)
+    page = st.number_input("Página", 1, total_paginas, value=page, step=1, key=f"{key}_page")
 
-    col_a, col_b, col_c, col_d = st.columns([1.2, 1.2, 2.5, 2.5])
-    with col_a:
-        ord_sel = st.selectbox("Ordenar por", ["Mais recentes", "Mais antigos", "Sem ordenação"], 
-                               index=["Mais recentes","Mais antigos","Sem ordenação"].index(ordenar), key=f"{key}_order")
-        if ord_sel != ordenar:
-            st.session_state[idx_key] = 0
-            st.rerun()
-    with col_b:
-        autoplay = st.checkbox("Auto-play", value=False, help="Requer streamlit-autorefresh", key=f"{key}_autoplay")
-    with col_c:
-        mostrar_legenda = st.checkbox("Mostrar legendas", value=mostrar_legenda, key=f"{key}_legend")
-    with col_d:
-        abrir_nova_aba = st.checkbox("Link para abrir em nova aba", value=True, key=f"{key}_newtab")
+    ini = (page - 1) * por_pagina
+    fim = min(ini + por_pagina, total)
+    page_df = data.iloc[ini:fim].reset_index(drop=True)
 
-    if autoplay:
-        try:
-            from streamlit_autorefresh import st_autorefresh
-            st_autorefresh(interval=3000, limit=None, key=f"{key}_tick")
-            st.session_state[idx_key] = (st.session_state[idx_key] + 1) % total
-        except Exception:
-            st.info("Para auto-play, instale: `pip install streamlit-autorefresh`")
+    # CSS mínimo para garantir legenda alinhada à esquerda e espaçamento
+    st.markdown(
+        f"""
+        <style>
+        .mosaic-caption-left-{key} {{
+            text-align: left;
+            margin-top: 6px;
+            font-size: 0.92rem;
+            line-height: 1.3rem;
+        }}
+        .mosaic-tile-{key} {{
+            width: 100%;
+        }}
+        .mosaic-tile-{key} .placeholder {{
+            aspect-ratio: {proporcao};
+            width: 100%;
+            background: #f2f2f2;
+            border-radius: 8px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    left, mid, right = st.columns([0.8, 1.0, 0.8])
-    with left:
-        if st.button("◀️", use_container_width=True, key=f"{key}_prev"):
-            st.session_state[idx_key] = (st.session_state[idx_key] - 1) % total
-    with right:
-        if st.button("▶️", use_container_width=True, key=f"{key}_next"):
-            st.session_state[idx_key] = (st.session_state[idx_key] + 1) % total
+    # Render do mosaico
+    rows = (len(page_df) + colunas - 1) // colunas
+    for r in range(rows):
+        cols = st.columns(colunas)
+        for c in range(colunas):
+            i = r * colunas + c
+            if i >= len(page_df):
+                break
+            row = page_df.iloc[i]
+            url = str(row[thumb_col])
+            cap = (row.get("caption") or "").strip() if mostrar_legenda else ""
 
-    idx = st.session_state[idx_key]
-    row = data.iloc[idx]
-    url = row[thumb_col]
+            with cols[c]:
+                # Imagem
+                if abrir_nova_aba:
+                    # link clicável que abre em nova aba
+                    st.markdown(
+                        f'<a href="{escape(url)}" target="_blank" rel="noopener noreferrer">',
+                        unsafe_allow_html=True,
+                    )
+                    st.image(url, use_container_width=True)
+                    st.markdown("</a>", unsafe_allow_html=True)
+                else:
+                    st.image(url, use_container_width=True)
 
-    cap_parts = []
-    if mostrar_legenda:
-        if row.get("data_legenda"):
-            cap_parts.append(row["data_legenda"])
-        if "post_type" in row and isinstance(row["post_type"], str):
-            cap_parts.append(row["post_type"])
-    caption = " • ".join(cap_parts) if cap_parts else None
+                # Legenda embaixo, alinhada à esquerda
+                if cap:
+                    st.markdown(f'<div class="mosaic-caption-left-{key}">{escape(cap)}</div>', unsafe_allow_html=True)
 
-    with mid:
-        st.image(url, caption=caption, use_container_width=True)  # << corrigido
-        if abrir_nova_aba:
-            st.markdown(f"[Abrir imagem]({url})")
-
-    st.caption(f"{idx+1} / {total}")
-    st.session_state[idx_key] = st.slider("Navegar", 0, total-1, idx, key=f"{key}_slider", label_visibility="visible")
-
+    st.caption(f"Mostrando {ini+1}–{fim} de {total} imagens • Página {page}/{total_paginas}")

@@ -89,6 +89,14 @@ def app_relatorio_macro():
 
     df_filtrado = etapa_filtro_contexto_farm(base_filtrada)
     
-    # passe o DF já filtrado (ex.: df_ctx da sua etapa de contexto FARM)
-    carrossel_imagens(df_filtrado, ordenar="Mais recentes")
+    mosaico_imagens(
+        df_filtrado,
+        thumb_col="thumbnail",
+        tz="America/Sao_Paulo",
+        ordenar="Mais recentes",
+        mostrar_legenda=True,
+        abrir_nova_aba=True,
+        colunas=5,
+        por_pagina=40,
+    )
 
