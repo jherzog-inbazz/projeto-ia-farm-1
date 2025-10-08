@@ -89,6 +89,7 @@ def app_relatorio_macro():
 
     df_filtrado = etapa_filtro_contexto_farm(base_filtrada)
     
+    # Commit
     mosaico_imagens(
         df_filtrado,
         thumb_col="thumbnail",

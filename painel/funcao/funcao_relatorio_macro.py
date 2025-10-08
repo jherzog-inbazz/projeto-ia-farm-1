@@ -996,6 +996,7 @@ def _is_http_url(x: str) -> bool:
     except Exception:
         return False
 
+# Commit
 def mosaico_imagens(
     df: pd.DataFrame,
     thumb_col: str = "thumbnail",
