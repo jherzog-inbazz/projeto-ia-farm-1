@@ -32,7 +32,7 @@ def app_relatorio_macro():
 
     with st.container():
 
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        col1, col2 = st.columns([1, 1])
         
         with col1:
             app_funcao_tipo_post(base_filtrada)
@@ -40,23 +40,27 @@ def app_relatorio_macro():
         with col2:
             app_funcao_temporal(base_filtrada)
 
-        with col3:
-            app_funcao_objetos(base_filtrada)
-
-        with col4:
-            app_funcao_hashtags(base_filtrada)
-
     with st.container():
 
         col1, col2, col3 = st.columns([1, 1, 2])
-        
+
         with col1:
-            app_funcao_cor_predominantes_dia(base_filtrada)
+            app_funcao_objetos(base_filtrada)
 
         with col2:
+            app_funcao_hashtags(base_filtrada)
+
+        with col3:
+            app_funcao_cor_predominantes_dia(base_filtrada)
+
+    with st.container():
+
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
             app_funcao_emocoes_legenda(base_filtrada)
         
-        with col3:
+        with col2:
             app_funcao_nuvem_palavras(base_filtrada, min_publicacoes_default=3, stopwords_extra={"farm", "look","ate"})
 
     st.subheader("📈 Agrupamento de Padrões de Influência")
