@@ -1,0 +1,14 @@
+streamlit
+pandas
+plotly
+numpy
+streamlit-authenticator
+duckdb
+streamlit_option_menu
+pillow
+xlsxwriter
+STOPWORDS
+WordCloud
+networkx
+re
+streamlit_autorefresh
