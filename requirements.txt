@@ -10,5 +10,4 @@ xlsxwriter
 STOPWORDS
 WordCloud
 networkx
-re
 streamlit_autorefresh
