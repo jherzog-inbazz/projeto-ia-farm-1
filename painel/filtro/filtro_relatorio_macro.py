@@ -9,9 +9,6 @@ def app_filtro_relatorio_macro():
     # importar a base em formato json base_farm_json
     df = pd.read_json('data/base_farm_json.json')
 
-    # renomear a coluna traking_id para post_pk
-    df = df.rename(columns={'tracking_id': 'post_pk'})
-
     # Filtrar casos que post_type não é NaN
     df = df[df['post_type'].notna()]
 
