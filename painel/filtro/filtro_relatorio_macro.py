@@ -6,8 +6,8 @@ import ast
 
 def app_filtro_relatorio_macro():
 
-    # importar a base em formato json base_farm_json atualizada
-    df = pd.read_json('data/base_farm_json.json')
+    # Importar a base em formato json base_farm_json at
+    df = pd.read_json('data/base_farm_json_ajust.json')
 
     # Filtrar casos que post_type não é NaN
     df = df[df['post_type'].notna()]
@@ -16,30 +16,24 @@ def app_filtro_relatorio_macro():
     df['post_type'] = df['post_type'].replace({
         'carousel_container': 'Carrossel',
         'feed': 'Feed',
-        'clips': 'Reels'
+        'clips': 'Reels',
+        'tiktok': 'Tiktok'
     })
 
     # Identificar variáveis que estão em formato de dicionário {}
     dict_columns = df.columns[df.applymap(lambda x: isinstance(x, dict)).any()]
 
-    # Quero pegar todas as colunas que são em formato de dicionário(dict_columns) e transformar em colunas separadas
+    # Expandir colunas de dicionário para colunas separadas
     for col in dict_columns:
-        # Expandir a coluna de dicionário em colunas separadas
         dict_expanded = df[col].apply(pd.Series)
-        
-        # Renomear as novas colunas para evitar conflitos
         dict_expanded = dict_expanded.add_prefix(f'{col}_')
-        
-        # Concatenar as novas colunas ao DataFrame original
         df = pd.concat([df, dict_expanded], axis=1)
-        
-        # Remover a coluna original de dicionário
         df = df.drop(columns=[col])
 
     df['post_date_resumo'] = pd.to_datetime(df['post_date'], format='%Y-%m-%dT%H:%M:%S.%fZ')
 
     with st.expander("Filtros"):
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)  # Agora são 3 colunas
 
         # 1) Filtro de datas
         if df["post_date_resumo"].notna().any():
@@ -60,6 +54,10 @@ def app_filtro_relatorio_macro():
         post_types = sorted(df["post_type"].dropna().unique().tolist()) if "post_type" in df.columns else []
         post_type_sel = c2.multiselect("Tipo de Publicação", post_types, default=post_types)
 
+        # 3) Filtro por marca
+        marcas = sorted(df['marca'].dropna().unique().tolist()) if 'marca' in df.columns else ['Farm', 'Insider']
+        marca_sel = c3.multiselect("Marca", marcas, default=marcas)
+
     # =========================
     # Aplicar filtros
     # =========================
@@ -67,11 +65,14 @@ def app_filtro_relatorio_macro():
 
     if date_start and date_end:
         base_filtrada = base_filtrada[
-            (base_filtrada["post_date_resumo"] >= pd.to_datetime(date_start))
-            & (base_filtrada["post_date_resumo"] <= pd.to_datetime(date_end) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
+            (base_filtrada["post_date_resumo"] >= pd.to_datetime(date_start)) &
+            (base_filtrada["post_date_resumo"] <= pd.to_datetime(date_end) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
         ]
 
     if post_types and post_type_sel:
         base_filtrada = base_filtrada[base_filtrada["post_type"].isin(post_type_sel)]
+
+    if marca_sel:
+        base_filtrada = base_filtrada[base_filtrada["marca"].isin(marca_sel)]
 
     return base_filtrada

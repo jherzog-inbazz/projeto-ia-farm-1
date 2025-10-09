@@ -1,6 +1,7 @@
 from PIL import Image
 import streamlit as st
 import pandas as pd
+from authentication.login import login_user
 
 import re
 import ast
@@ -8,20 +9,22 @@ import ast
 from painel.filtro.filtro_relatorio_macro import *
 from painel.funcao.funcao_relatorio_macro import *
 
-def app_relatorio_macro():
-    
-    col1, col2 = st.columns([2, 5])
-    with col1:
-        st.image("img/Logo-Farm.png", use_container_width=True)
-    with col2:
-        st.write("")
+def app_relatorio_macro(authenticator):
 
-    st.markdown("# Insights de Performance dos Conteúdos da Farm")
+    with st.container():
+
+        col1,col2 = st.columns([19,1])
+        
+        with col1:
+            st.markdown("# Insights de Performance dos Conteúdos da Farm")
+
+        with col2:
+            authenticator.logout(location='main')
     
     base_filtrada = app_filtro_relatorio_macro()
 
-    st.subheader("📊 Conceitos Básicos")
-
+    st.subheader("📊 Informações Gerais")
+    
     with st.container():
         app_funcao_conceito_basico_parte01(base_filtrada)
     
@@ -32,7 +35,7 @@ def app_relatorio_macro():
 
     with st.container():
 
-        col1, col2, col3 = st.columns([1,1,1])
+        col1, col2, col3 = st.columns([1,2,2], border=True)
         
         with col1:
             app_funcao_tipo_post(base_filtrada)
@@ -43,36 +46,27 @@ def app_relatorio_macro():
         with col3:
             app_funcao_hashtags(base_filtrada)
 
-    st.subheader("📈 Agrupamento de Padrões de Influência")
-
     with st.container():
 
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        col1, col2 = st.columns([1, 1], border=True)
         
         with col1:
             app_funcao_emocoes_legenda(base_filtrada)
 
         with col2:
             grafico_topicos_legenda(base_filtrada, top_n=5)
+    
+    with st.container():
 
-        with col3:
+        col1, col2 = st.columns([1, 1], border=True)
+
+        with col1:
             grafico_gatilhos_legenda(base_filtrada, top_n=5)
 
-        with col4:
+        with col2:
             grafico_ctas_legenda(base_filtrada, top_n=5)
     
-
-    df_filtrado = etapa_filtro_contexto_farm(base_filtrada)
     
-    # Commit
-    mosaico_imagens(
-        df_filtrado,
-        thumb_col="thumbnail",
-        tz="America/Sao_Paulo",
-        ordenar="Mais recentes",
-        mostrar_legenda=True,
-        abrir_nova_aba=True,
-        colunas=5,
-        por_pagina=40,
-    )
+    st.subheader("🧩 Mosaico de Imagens")
+    filtro_e_mosaico_imagens(base_filtrada)
 

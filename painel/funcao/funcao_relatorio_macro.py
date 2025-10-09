@@ -60,7 +60,7 @@ def app_funcao_conceito_basico_parte01(base_filtrada):
     df = base_filtrada.copy()
 
     with st.container():
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3 = st.columns(3, border=True)
 
         total_posts = len(df)
 
@@ -90,7 +90,7 @@ def app_funcao_conceito_basico_parte02(base_filtrada):
     df = base_filtrada.copy()
 
     with st.container():
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4 = st.columns(4, border=True)
 
         # menções (@)
         menc_img = _col_bool(df, "imagem_mencoes_ocr")
@@ -227,6 +227,8 @@ def app_funcao_objetos(base_filtrada):
 
     st.plotly_chart(fig, use_container_width=True)
 
+
+
 def app_funcao_hashtags(base_filtrada):
 
     if "legenda_hashtags" not in base_filtrada.columns:
@@ -269,32 +271,32 @@ def app_funcao_hashtags(base_filtrada):
         st.info("Sem hashtags para exibir.")
         return
 
-    # Contagem e Top 20
+    # Contagem e Top 10
     contagem = exploded.value_counts().reset_index()
     contagem.columns = ["hashtag", "count"]
 
-    top20 = contagem.head(20).copy()
+    top10 = contagem.head(10).copy()  # Alterado de top20 para top10
     total = int(exploded.shape[0])
-    top20["percent"] = (top20["count"] / max(total, 1)) * 100
+    top10["percent"] = (top10["count"] / max(total, 1)) * 100
 
     # Rótulo exibido com '#'
-    top20["hashtag_fmt"] = "#" + top20["hashtag"].astype(str)
+    top10["hashtag_fmt"] = "#" + top10["hashtag"].astype(str)
 
     # Gráfico: barras horizontais, azul, sem fundo/grade
-    top20 = top20.sort_values("count", ascending=True)
+    top10 = top10.sort_values("count", ascending=True)
     fig = px.bar(
-        top20,
+        top10,
         x="count",
         y="hashtag_fmt",
         orientation="h",
-        text=top20.apply(lambda r: f"{r['count']} ({r['percent']:.1f}%)", axis=1),
+        text=top10.apply(lambda r: f"{r['count']} ({r['percent']:.1f}%)", axis=1),
         labels={"count": "Quantidade", "hashtag_fmt": "Hashtag"},
-        title="Top 20 hashtags (hashtags na legenda)",
+        title="Top 10 hashtags (hashtags na legenda)",  # Título alterado para Top 10
         color_discrete_sequence=["#213ac7"],
     )
 
     fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_yaxes(categoryorder="array", categoryarray=top20["hashtag_fmt"])
+    fig.update_yaxes(categoryorder="array", categoryarray=top10["hashtag_fmt"])
 
     fig.update_layout(
         plot_bgcolor="rgba(0,0,0,0)",
@@ -306,8 +308,6 @@ def app_funcao_hashtags(base_filtrada):
     fig.update_yaxes(showgrid=False, zeroline=False, title="Hashtag")
 
     st.plotly_chart(fig, use_container_width=True)
-
-
 
 
 
@@ -532,10 +532,9 @@ def grafico_ctas_legenda(df: pd.DataFrame, top_n: int | None = None):
 
 
 
+import streamlit as st
+from html import escape
 
-
-
-# lista oficial de colunas (booleanas/0-1/strings "true"/"1")
 CONTEXT_FARM_COLS = [
     "imagem_contexto_farm_cabide_visivel",
     "imagem_contexto_farm_arara_visivel",
@@ -557,22 +556,14 @@ CONTEXT_FARM_COLS = [
 ]
 
 def _series_to_bool(s: pd.Series) -> pd.Series:
-    """Converte uma série (bool, numérica, string) para booleano.
-    True se valor booleano True, numérico > 0, ou string em {'true','1','sim','yes','y','verdadeiro'}.
-    NaN/None/vazio viram False.
-    """
+    """Converte uma série (bool, numérica, string) para booleano."""
     if s.dtype == bool:
         return s.fillna(False)
-
-    # tenta numérico (>0)
     s_str = s.astype(str).str.strip().str.lower()
     num = pd.to_numeric(s_str, errors="coerce")
     mask_num = num.fillna(0) > 0
-
-    # strings verdadeiras
     truthy = {"true", "1", "sim", "yes", "y", "verdadeiro"}
     mask_str = s_str.isin(truthy)
-
     return (mask_num | mask_str).fillna(False)
 
 def _fmt_label(col: str) -> str:
@@ -580,124 +571,108 @@ def _fmt_label(col: str) -> str:
     base = col.replace("imagem_contexto_farm_", "").replace("_", " ").strip()
     return base.capitalize()
 
-def etapa_filtro_contexto_farm(base_filtrada: pd.DataFrame):
-    st.subheader("🎛️ Filtro por Contexto FARM")
-
-    # apenas colunas disponíveis no DF
-    available = [c for c in CONTEXT_FARM_COLS if c in base_filtrada.columns]
-    if not available:
-        st.warning("Nenhuma coluna de contexto FARM encontrada no DataFrame.")
-        return base_filtrada
-
-    # multiselect com labels amigáveis
-    label_map = {c: _fmt_label(c) for c in available}
-    inv_label_map = {v: k for k, v in label_map.items()}
-
-    selected_labels = st.multiselect(
-        "Selecione os sinais (o post deve conter **todos**):",
-        options=[label_map[c] for c in available],
-        default=[],
-    )
-    selected_cols = [inv_label_map[lbl] for lbl in selected_labels]
-
-    # aplica filtro (AND entre as colunas selecionadas)
-    if selected_cols:
-        mask_all = pd.Series(True, index=base_filtrada.index)
-        for col in selected_cols:
-            mask_all &= _series_to_bool(base_filtrada[col])
-        df_filtrado = base_filtrada.loc[mask_all].copy()
-    else:
-        df_filtrado = base_filtrada.copy()
-
-    # resultado (por enquanto: apenas quantidade)
-    st.metric("Quantidade de publicações (filtradas)", len(df_filtrado))
-
-    return df_filtrado
-
-
-
-import pandas as pd
-import streamlit as st
-from html import escape
-
 def _is_http_url(x: str) -> bool:
+    """Verifica se o valor é uma URL válida (http ou https)."""
     try:
         return isinstance(x, str) and x.startswith(("http://", "https://"))
     except Exception:
         return False
 
-# Commit
-def mosaico_imagens(
-    df: pd.DataFrame,
-    thumb_col: str = "thumbnail",
-    tz: str = "America/Sao_Paulo",
-    key: str = "mosaico_main",
-    ordenar: str = "Mais recentes",      # "Mais recentes" | "Mais antigos" | "Sem ordenação"
-    mostrar_legenda: bool = True,         # usa a coluna 'caption'
-    abrir_nova_aba: bool = True,
-    colunas: int = 5,                     # nº de colunas no mosaico
-    por_pagina: int = 40,                 # nº máx de imagens por página
-    proporcao: str = "1 / 1",             # aspect-ratio opcional apenas p/ placeholder
-):
-    st.subheader("🧩 Mosaico de Imagens")
+def filtro_e_mosaico_imagens(df: pd.DataFrame, thumb_col: str = "thumbnail", tz: str = "America/Sao_Paulo", key: str = "mosaico_main", ordenar: str = "Mais recentes", mostrar_legenda: bool = False, abrir_nova_aba: bool = True, colunas: int = 5, por_pagina: int = 40, proporcao: str = "1 / 1"):
 
-    if thumb_col not in df.columns:
-        st.warning(f"Coluna '{thumb_col}' não encontrada.")
-        return
+    with st.container():
 
-    data = df.copy()
+        col1 = st.columns(1, border=True)
+        
+        with col1[0]:
 
-    # Datas (mantidas caso queira ordenar por data)
-    if "post_date" in data.columns:
-        data["post_date"] = pd.to_datetime(data["post_date"], errors="coerce", utc=True)
-        try:
-            data["post_date_local"] = data["post_date"].dt.tz_convert(tz)
-        except Exception:
-            data["post_date_local"] = data["post_date"]
-    # Apenas URLs válidas e únicas
-    data = (
-        data[data[thumb_col].apply(_is_http_url)]
-        .drop_duplicates(subset=[thumb_col])
-        .reset_index(drop=True)
-    )
-    if data.empty:
-        st.info("Nenhuma imagem válida para exibir.")
-        return
+            available = [c for c in CONTEXT_FARM_COLS if c in df.columns]
+            if not available:
+                st.warning("Nenhuma coluna de contexto FARM encontrada no DataFrame.")
+                return df
 
-    # Ordenação
-    if ordenar != "Sem ordenação" and "post_date" in data.columns:
-        data = data.sort_values("post_date", ascending=(ordenar == "Mais antigos"))
+            # multiselect com labels amigáveis
+            label_map = {c: _fmt_label(c) for c in available}
+            inv_label_map = {v: k for k, v in label_map.items()}
 
-    # Controles
-    c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.0, 1.0])
+            selected_labels = st.multiselect(
+                "Selecione os conteúdos (o post deve conter **todos**):",
+                options=[label_map[c] for c in available],
+                default=[],
+            )
+            selected_cols = [inv_label_map[lbl] for lbl in selected_labels]
+
+            # aplica filtro (AND entre as colunas selecionadas)
+            if selected_cols:
+                mask_all = pd.Series(True, index=df.index)
+                for col in selected_cols:
+                    mask_all &= _series_to_bool(df[col])
+                df_filtrado = df.loc[mask_all].copy()
+            else:
+                df_filtrado = df.copy()
+
+            if thumb_col not in df_filtrado.columns:
+                st.warning(f"Coluna '{thumb_col}' não encontrada.")
+                return
+
+            data = df_filtrado.copy()
+
+            if "post_date" in data.columns:
+                data["post_date"] = pd.to_datetime(data["post_date"], errors="coerce", utc=True)
+                try:
+                    data["post_date_local"] = data["post_date"].dt.tz_convert(tz)
+                except Exception:
+                    data["post_date_local"] = data["post_date"]
+
+            data = (
+                data[data[thumb_col].apply(_is_http_url)]
+                .drop_duplicates(subset=[thumb_col])
+                .reset_index(drop=True)
+            )
+            if data.empty:
+                st.info("Nenhuma imagem válida para exibir.")
+                return
+
+            # Ordenando de acordo com a opção selecionada
+            if ordenar != "Sem ordenação" and "post_date" in data.columns:
+                data = data.sort_values("post_date", ascending=(ordenar == "Mais antigos"))
+
+            c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.0, 1.0])
+
+            with c1:
+                mostrar_legenda = st.checkbox("Mostrar legendas (caption)", value=mostrar_legenda, key=f"{key}_legend")
+                
+            with c2:
+                ord_sel = st.selectbox(
+                    "Ordenar por",
+                    ["Mais recentes", "Mais antigos", "Sem ordenação"],
+                    index=["Mais recentes","Mais antigos","Sem ordenação"].index(ordenar),
+                    key=f"{key}_order",
+                )
+            with c3:
+                colunas = st.number_input("Colunas", 2, 10, value=colunas, step=1, key=f"{key}_cols")
+            with c4:
+                por_pagina = st.number_input("Por página", 10, 200, value=por_pagina, step=10, key=f"{key}_pp")
+
+            total = len(data)
+            total_paginas = max(1, (total + por_pagina - 1) // por_pagina)
+            page = st.session_state.get(f"{key}_page", 1)
+            page = st.number_input("Página", 1, total_paginas, value=page, step=1, key=f"{key}_page")
+
+            ini = (page - 1) * por_pagina
+            fim = min(ini + por_pagina, total)
+            page_df = data.iloc[ini:fim].reset_index(drop=True)
+
+    # Exibindo a quantidade de publicações no filtro
+    c1, c2 = st.columns([10, 1.5])
     with c1:
-        ord_sel = st.selectbox(
-            "Ordenar por",
-            ["Mais recentes", "Mais antigos", "Sem ordenação"],
-            index=["Mais recentes","Mais antigos","Sem ordenação"].index(ordenar),
-            key=f"{key}_order",
-        )
+        st.metric("Quantidade de publicações (filtradas)", len(df_filtrado))
+
+    # Botão para limpar o filtro
     with c2:
-        mostrar_legenda = st.checkbox("Mostrar legendas (caption)", value=mostrar_legenda, key=f"{key}_legend")
-    with c3:
-        colunas = st.number_input("Colunas", 2, 10, value=colunas, step=1, key=f"{key}_cols")
-    with c4:
-        por_pagina = st.number_input("Por página", 10, 200, value=por_pagina, step=10, key=f"{key}_pp")
+        st.write("")
 
-    if ord_sel != ordenar:
-        st.session_state.pop(f"{key}_page", None)
-        st.rerun()
-
-    total = len(data)
-    total_paginas = max(1, (total + por_pagina - 1) // por_pagina)
-    page = st.session_state.get(f"{key}_page", 1)
-    page = st.number_input("Página", 1, total_paginas, value=page, step=1, key=f"{key}_page")
-
-    ini = (page - 1) * por_pagina
-    fim = min(ini + por_pagina, total)
-    page_df = data.iloc[ini:fim].reset_index(drop=True)
-
-    # CSS mínimo para garantir legenda alinhada à esquerda e espaçamento
+    # Layout do mosaico de imagens
     st.markdown(
         f"""
         <style>
@@ -721,7 +696,6 @@ def mosaico_imagens(
         unsafe_allow_html=True,
     )
 
-    # Render do mosaico
     rows = (len(page_df) + colunas - 1) // colunas
     for r in range(rows):
         cols = st.columns(colunas)
@@ -734,9 +708,7 @@ def mosaico_imagens(
             cap = (row.get("caption") or "").strip() if mostrar_legenda else ""
 
             with cols[c]:
-                # Imagem
                 if abrir_nova_aba:
-                    # link clicável que abre em nova aba
                     st.markdown(
                         f'<a href="{escape(url)}" target="_blank" rel="noopener noreferrer">',
                         unsafe_allow_html=True,
@@ -746,7 +718,6 @@ def mosaico_imagens(
                 else:
                     st.image(url, use_container_width=True)
 
-                # Legenda embaixo, alinhada à esquerda
                 if cap:
                     st.markdown(f'<div class="mosaic-caption-left-{key}">{escape(cap)}</div>', unsafe_allow_html=True)
 

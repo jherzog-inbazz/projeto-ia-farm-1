@@ -40,13 +40,9 @@ elif auth_status is False:
     mostrar_logo_e_login()
 
 else:
-    # Boas-vindas e botão de logout
-    col1, col2 = st.columns([9, 1])
-    with col1:
-        st.write(f'Seja bem-vindo(a), membro da {st.session_state["name"]}!')
-    with col2:
-        authenticator.logout(location='main')
 
+    st.image("img/row-logos.png", use_container_width=True)
+                
     # Permissão por tipo de usuário
     usuarios_autorizados = {
         "inbazz": "inbazz",
@@ -56,6 +52,6 @@ else:
     usuario_tipo = st.session_state.get("email")
 
     if usuario_tipo in usuarios_autorizados.values():
-        app_relatorio_macro()
+        app_relatorio_macro(authenticator)
     else:
         st.warning("Acesso restrito. Usuário não autorizado ou sessão inválida.")
