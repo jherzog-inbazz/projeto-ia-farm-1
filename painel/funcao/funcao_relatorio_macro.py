@@ -60,7 +60,7 @@ def app_funcao_conceito_basico_parte01(base_filtrada):
     df = base_filtrada.copy()
 
     with st.container():
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
 
         total_posts = len(df)
 
@@ -79,21 +79,18 @@ def app_funcao_conceito_basico_parte01(base_filtrada):
         elif "imagem_texto_proporcao" in df.columns:
             pct_prod = ((pd.to_numeric(df["imagem_texto_proporcao"], errors="coerce").fillna(0) > 0).mean()*100)
 
-        # média de caracteres
-        avg_chars = df["caption"].astype(str).str.len().mean() if "caption" in df.columns else 0
 
         # métricas (sem **; use o CSS para negrito)
         c1.metric("Qtd. de Publicações", total_posts)
         c2.metric("% de Publicações com Rosto", f"{pct_faces:.1f}%")
         c3.metric("% de Publicações com Texto na Imagem", f"{pct_prod:.1f}%")
-        c4.metric("Média de Caracteres por Legenda", f"{avg_chars:.0f}")
 
 # --- parte 2 ---
 def app_funcao_conceito_basico_parte02(base_filtrada):
     df = base_filtrada.copy()
 
     with st.container():
-        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
+        c1, c2, c3, c4 = st.columns(4)
 
         # menções (@)
         menc_img = _col_bool(df, "imagem_mencoes_ocr")
@@ -116,39 +113,11 @@ def app_funcao_conceito_basico_parte02(base_filtrada):
         cup_img = _col_bool(df, "imagem_codigo_cupom")
         pct_cupons = ((cup_img | cup_leg).mean()*100)
 
-        # cód. vendedora (variantes)
-        vend_leg_col = _pick_first_col(df, ["legenda_codigos_codigos_vendedora", "legenda_codigos.codigos_vendedora"])
-        vend_leg = _col_bool(df, vend_leg_col) if vend_leg_col else pd.Series(False, index=df.index)
-        pct_cod_vendedor = (vend_leg.mean()*100)
-
-        # 'ref' em legenda_produtos
-        if "legenda_produtos" in df.columns:
-            tem_ref = df["legenda_produtos"].apply(_has_ref_legenda_produtos)
-            pct_ref_legenda = tem_ref.mean() * 100
-        else:
-            pct_ref_legenda = 0.0
-
-        # emoticoins
-        emo_img = _col_bool(df, "imagem_emoticoins")
-        emo_leg = _col_bool(df, "legenda_emoticoins")
-        pct_emoticoins = ((emo_img | emo_leg).mean()*100)
-
-        # multi-marca (binária 0/1)
-        if "legenda_multi_marca" in df.columns:
-            s = pd.to_numeric(df["legenda_multi_marca"], errors="coerce").fillna(0).clip(0,1)
-            pct_multi_marca = s.mean() * 100
-        else:
-            pct_multi_marca = 0.0
-
         # métricas
         c1.metric("% Publi. com Menções (@)", f"{pct_mentions:.1f}%")
         c2.metric("% Publi. com Hashtags", f"{pct_hashtags:.1f}%")
         c3.metric("% Publi. com Url", f"{pct_urls:.1f}%")
         c4.metric("% Publi. com Cupons", f"{pct_cupons:.1f}%")
-        c5.metric("% Publi. com Cód. de Vendedor", f"{pct_cod_vendedor:.1f}%")
-        c6.metric("% Publi. com Código 'ref' na Legenda", f"{pct_ref_legenda:.1f}%")
-        c7.metric("% Publi. com Emoticoins", f"{pct_emoticoins:.1f}%")
-        c8.metric("% Publi. com +1 Marca", f"{pct_multi_marca:.1f}%")
 
 
 
@@ -195,95 +164,6 @@ def app_funcao_tipo_post(base_filtrada):
     fig.update_traces(textposition="outside", cliponaxis=False)
 
     st.plotly_chart(fig, use_container_width=True)
-
-
-
-# ------------------------------------------
-# Funções auxiliares
-# ------------------------------------------
-def _prepare_datetime(df: pd.DataFrame, tz: str = "America/Sao_Paulo") -> pd.DataFrame:
-    out = df.copy()
-    # Garante datetime tz-aware a partir de strings ISO (com Z)
-    out["post_date"] = pd.to_datetime(out["post_date"], errors="coerce", utc=True)
-    out = out.dropna(subset=["post_date", "post_type"])
-    # Converte para o fuso desejado
-    out["post_date_local"] = out["post_date"].dt.tz_convert(tz)
-    return out
-
-def _style_plot(fig):
-    fig.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        legend_title_text="Tipo de post",
-        margin=dict(l=10, r=10, t=40, b=10),
-    )
-    fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(showgrid=False, zeroline=False)
-
-# ------------------------------------------
-# Visualizações
-# ------------------------------------------
-def chart_por_hora(df_local: pd.DataFrame):
-    df_local["hora"] = df_local["post_date_local"].dt.floor("H")
-    g = (df_local.groupby(["hora", "post_type"])
-                .size()
-                .reset_index(name="count")
-                .sort_values("hora"))
-
-    fig = px.line(
-        g,
-        x="hora",
-        y="count",
-        color="post_type",
-        markers=True,
-        labels={"hora": "Data e hora", "count": "Qtd. publicações", "post_type": "Tipo de post"},
-        title="Publicações por tipo — agreg. por hora",
-    )
-    _style_plot(fig)
-    return fig
-
-def chart_por_dia(df_local: pd.DataFrame, barmode: str = "group"):
-    df_local["dia"] = df_local["post_date_local"].dt.floor("D")
-    g = (df_local.groupby(["dia", "post_type"])
-                .size()
-                .reset_index(name="count")
-                .sort_values("dia"))
-
-    fig = px.bar(
-        g,
-        x="dia",
-        y="count",
-        color="post_type",
-        barmode=barmode,  # "group" ou "stack"
-        text=g["count"].map(lambda v: f"{v}"),
-        labels={"dia": "Dia", "count": "Qtd. publicações", "post_type": "Tipo de post"},
-        title="Publicações por tipo — agreg. por dia",
-    )
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    _style_plot(fig)
-    return fig
-
-# ------------------------------------------
-# App principal
-# ------------------------------------------
-def app_funcao_temporal(base_filtrada: pd.DataFrame):
-    viz = st.radio(
-        "Escolha a visualização:",
-        options=("Data e hora (por hora)", "Por dia"),
-        index=0,
-        horizontal=True,
-    )
-
-    df_local = _prepare_datetime(base_filtrada)
-
-    if viz == "Data e hora (por hora)":
-        fig = chart_por_hora(df_local)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        # Se preferir empilhado, troque para "stack"
-        barmode = "group"
-        fig = chart_por_dia(df_local, barmode=barmode)
-        st.plotly_chart(fig, use_container_width=True)
 
 
 def app_funcao_objetos(base_filtrada):
@@ -429,145 +309,6 @@ def app_funcao_hashtags(base_filtrada):
 
 
 
-def app_funcao_cor_predominantes_dia(base_filtrada: pd.DataFrame, tz: str = "America/Sao_Paulo"):
-    """
-    Cores dominantes por dia (composição %), ordenadas do maior para o menor.
-    - Consolida categorias e sinônimos/variações:
-      azul, multicolored, verde, amarelo, bege, branco, preto, unknown, rosa,
-      vermelho, marrom, laranja, cinza, floral, multicolor, colorido, multi,
-      multicolorido, roxo, pink, multi_colorido...
-    - 'não identificado' aparece com hatch (textura) no gráfico.
-    Requer colunas: 'post_date' (UTC/ISO) e 'imagem_cor_dominante'.
-    """
-
-    req = {"post_date", "imagem_cor_dominante"}
-    if not req.issubset(base_filtrada.columns):
-        st.warning(f"Faltam colunas: {sorted(req - set(base_filtrada.columns))}")
-        return
-
-    # ---------- helpers ----------
-    FINAL_CLASSES = {
-        "amarelo","azul","verde","vermelho","rosa","roxo",
-        "laranja","marrom","cinza","branco","bege","multicolorida"
-    }
-
-    # mapa de sinônimos/variações -> classe final
-    NORMALIZA = {
-        # multicoloridos e variações
-        "multicolored": "multicolorida",
-        "multicolor": "multicolorida",
-        "multicolorido": "multicolorida",
-        "multi": "multicolorida",
-        "multi colorido": "multicolorida",
-        "multi_colorido": "multicolorida",
-        "colorido": "multicolorida",
-
-        # inglês -> pt
-        "blue": "azul", "yellow": "amarelo", "black": "preto", "white": "branco",
-        "green": "verde", "red": "vermelho", "pink": "rosa", "purple": "roxo",
-        "orange": "laranja", "brown": "marrom", "gray": "cinza", "grey": "cinza",
-
-        # outros rótulos frequentes
-        "unknown": "não identificado",
-        "floral": "multicolorida",   # padrão/estampa → trata como multicolorida
-    }
-
-    COLOR_MAP = {
-        "amarelo"      : "#FFD23F",
-        "azul"         : "#1f77b4",
-        "verde"        : "#2ca02c",
-        "vermelho"     : "#d62728",
-        "rosa"         : "#e377c2",
-        "roxo"         : "#9467bd",
-        "laranja"      : "#ff7f0e",
-        "marrom"       : "#8c564b",
-        "cinza"        : "#7f7f7f",
-        "branco"       : "#e5e5e5",
-        "bege"         : "#D2B48C",
-        "multicolorida": "#17becf",
-        "não identificado": "#000000",
-    }
-
-    def _norm_text(s: str) -> str:
-        s = (s or "").lower().replace("_", " ").strip()
-        s = "".join(ch for ch in unicodedata.normalize("NFD", s) if not unicodedata.combining(ch))
-        return s
-
-    def _consolida_cor(raw: str) -> str:
-        x = _norm_text(raw)
-        if x in ("", "none", "null"):
-            return "não identificado"
-        if x in NORMALIZA:
-            return NORMALIZA[x]
-        if x in FINAL_CLASSES:
-            return x
-        if x.startswith("multi"):
-            return "multicolorida"
-        return "não identificado"
-
-    # ---------- preparar dados ----------
-    df = base_filtrada.copy()
-    df["post_date"] = pd.to_datetime(df["post_date"], errors="coerce", utc=True)
-    df = df.dropna(subset=["post_date"])
-    df["post_date_local"] = df["post_date"].dt.tz_convert(tz)
-    df["dia"] = df["post_date_local"].dt.floor("D")
-
-    df["cor_cat"] = df["imagem_cor_dominante"].astype(str).apply(_consolida_cor)
-
-    if df["cor_cat"].eq("não identificado").all():
-        st.info("Todas as cores foram classificadas como 'não identificado'. Verifique os rótulos de origem.")
-        return
-
-    # ---------- agregação e % por dia ----------
-    g = df.groupby(["dia", "cor_cat"]).size().reset_index(name="count")
-    g["percent"] = g["count"] / g.groupby("dia")["count"].transform("sum") * 100
-    g["padrao"] = g["cor_cat"].map(lambda c: "desconhecida" if c == "não identificado" else "normal")
-
-    # ---------- ORDENAR DO MAIOR PARA O MENOR ----------
-    # calculamos o percentual médio global por cor para definir a ordem
-    ordem_global = (
-        g.groupby("cor_cat")["percent"]
-         .mean()
-         .sort_values(ascending=False)
-         .index.tolist()
-    )
-
-    # Garantir que todas as cores do COLOR_MAP apareçam no final se inexistentes
-    for cor in COLOR_MAP.keys():
-        if cor not in ordem_global:
-            ordem_global.append(cor)
-
-    # Reordena o DataFrame por dia e percent (desc) só para consistência visual interna
-    g = g.sort_values(["dia", "percent"], ascending=[True, False])
-
-    # ---------- gráfico ----------
-    fig = px.bar(
-        g,
-        x="dia",
-        y="percent",
-        color="cor_cat",
-        barmode="stack",
-        labels={"dia": "Dia", "percent": "% do dia", "cor_cat": "Cor"},
-        title="Cores predominantes por dia (composição %)",
-        color_discrete_map=COLOR_MAP,
-        category_orders={"cor_cat": ordem_global},  # <- ordena do maior para menor
-        pattern_shape="padrao",
-        pattern_shape_map={"normal": "", "desconhecida": "x"},
-    )
-
-    # estilo
-    fig.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=10, r=10, t=50, b=10),
-        legend_title_text=None,
-        showlegend=True,
-    )
-    fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(showgrid=False, zeroline=False, tickformat=".0f", range=[0, 100])
-
-    st.plotly_chart(fig, use_container_width=True)
-
 
 
 
@@ -685,117 +426,6 @@ def app_funcao_emocoes_legenda(base_filtrada: pd.DataFrame, top_n: int = 10):
     fig.update_yaxes(showgrid=False, zeroline=False, title="Emoção")
 
     st.plotly_chart(fig, use_container_width=True)
-
-
-
-
-def app_funcao_nuvem_palavras(
-    base_filtrada: pd.DataFrame,
-    min_publicacoes_default: int = 3,
-    stopwords_extra: set[str] | None = None,
-):
-    """
-    Nuvem de palavras do caption com:
-      - limpeza (URLs, #/@, emojis, pontuação)
-      - stopwords PT + extras
-      - filtro: mínimo de publicações (DF)
-      - filtro manual: palavras para remover
-      - colormap YlGnBu (amarelo→azul) e fundo transparente
-    """
-    if "caption" not in base_filtrada.columns:
-        st.warning("Coluna 'caption' não encontrada.")
-        return
-
-    # ============================
-    # Filtros lado a lado (UI)
-    # ============================
-    col1, col2 = st.columns(2)
-    with col1:
-        min_posts = st.slider(
-            "**Mínimo de publicações por palavra**",
-            min_value=1, max_value=50, value=min_publicacoes_default, step=1
-        )
-    with col2:
-        manual_raw = st.text_input(
-            "**Remover palavras manualmente (sep.: farmrio, roupa, ; ou |)**",
-            value=""
-        )
-
-    # ============================
-    # Limpeza e tokenização
-    # ============================
-    URL_RE   = re.compile(r"https?://\S+|www\.\S+", re.I)
-    EMOJI_RE = re.compile(r"[\U00010000-\U0010FFFF]", flags=re.UNICODE)
-    # mantém letras acentuadas e dígitos; remove o resto
-    PUNCT_RE = re.compile(r"[^\w\sáàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]", re.UNICODE)
-    TOK_RE   = re.compile(r"\b[\wáàâãéèêíïóôõöúçñ]{2,}\b", re.UNICODE)
-
-    def clean_text(t: str) -> str:
-        t = str(t or "")
-        t = URL_RE.sub(" ", t)
-        t = re.sub(r"[#@]", " ", t)
-        t = EMOJI_RE.sub(" ", t)
-        t = PUNCT_RE.sub(" ", t)
-        t = re.sub(r"\s+", " ", t).strip().lower()
-        return t
-
-    PT_STOP = {
-        "a","o","as","os","um","uma","uns","umas","de","da","do","das","dos",
-        "e","é","em","no","na","nos","nas","para","pra","pro","por","com","sem",
-        "que","se","são","ser","foi","era","sua","seu","suas","seus","meu","minha",
-        "meus","minhas","teu","tua","teus","tuas","nosso","nossa","nossos","nossas",
-        "isso","isto","aquele","aquela","aquilo","esse","essa","estes","estas",
-        "já","hoje","amanhã","ontem","mais","menos","muito","muita","muitos","muitas",
-        "pouco","pouca","poucos","poucas","quando","onde","como","também","tbm",
-        "q","d","la","lá","aí","ai","porque","porquê","ne","num","tá","to","tô",
-        "tem","têm","ter","cada","entre","sobre","até","ou","seja"
-    }
-    if stopwords_extra:
-        PT_STOP |= {str(x).lower() for x in stopwords_extra}
-
-    # Stopwords manuais digitadas (mesma limpeza/tokenização para casar com os tokens)
-    manual_tokens = set(TOK_RE.findall(clean_text(manual_raw)))
-    PT_STOP |= manual_tokens
-
-    def tokens_from_caption(t: str) -> list[str]:
-        t = clean_text(t)
-        return [tok for tok in TOK_RE.findall(t) if tok not in PT_STOP]
-
-    captions = base_filtrada["caption"].astype(str).fillna("")
-    docs_tokens = captions.map(tokens_from_caption)
-
-    # ============================
-    # DF (nº de publicações) e TF
-    # ============================
-    doc_freq = Counter()
-    term_freq = Counter()
-    for toks in docs_tokens:
-        doc_freq.update(set(toks))  # aparece em quantos posts
-        term_freq.update(toks)      # total de ocorrências
-
-    kept = {w for w, c in doc_freq.items() if c >= min_posts}
-    freqs = {w: term_freq[w] for w in kept}
-
-    st.caption(f"{len(kept)} termos após filtros • stopwords manuais: {', '.join(sorted(manual_tokens)) or '—'}")
-
-    if not freqs:
-        st.info("Nenhuma palavra passou o filtro. Ajuste o mínimo ou as remoções manuais.")
-        return
-
-    
-    wc = WordCloud(
-        width=1200, height=450,
-        background_color=None, mode="RGBA",     # fundo transparente
-        colormap="YlGnBu",                      # amarelo → azul
-        prefer_horizontal=0.9,
-        min_font_size=10,
-        max_words=400
-    ).generate_from_frequencies(freqs)
-
-    fig, ax = plt.subplots(figsize=(12, 4), dpi=120)
-    ax.imshow(wc, interpolation="bilinear")
-    ax.axis("off")
-    st.pyplot(fig, clear_figure=True)
 
 
 AZUL = "#213ac7"

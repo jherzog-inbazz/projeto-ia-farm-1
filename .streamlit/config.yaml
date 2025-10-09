@@ -4,10 +4,6 @@ credentials:
       email: inbazz
       name: Inbazz
       "password": "i1n2b3a4z5z6"
-    farm:
-      email: farm
-      name: Farm
-      "password": "teste2020@farm"
 cookie:
   expiry_days: 1
   key: random_signature_key

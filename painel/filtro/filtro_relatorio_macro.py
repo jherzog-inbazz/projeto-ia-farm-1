@@ -6,7 +6,7 @@ import ast
 
 def app_filtro_relatorio_macro():
 
-    # importar a base em formato json base_farm_json
+    # importar a base em formato json base_farm_json atualizada
     df = pd.read_json('data/base_farm_json.json')
 
     # Filtrar casos que post_type não é NaN
