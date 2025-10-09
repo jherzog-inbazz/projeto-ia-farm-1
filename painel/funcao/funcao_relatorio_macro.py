@@ -373,7 +373,7 @@ def _parse_emocoes(val):
         out.append(MAP.get(t, t))
     return out
 
-def app_funcao_emocoes_legenda(base_filtrada: pd.DataFrame, top_n: int = 10):
+def app_funcao_emocoes_legenda(base_filtrada: pd.DataFrame, top_n: int = 5):
     """
     Gera um Top N de emoções (contagem e % ao lado), a partir de df['legenda_sentimento_emocoes'].
     """
@@ -396,7 +396,9 @@ def app_funcao_emocoes_legenda(base_filtrada: pd.DataFrame, top_n: int = 10):
     total_ocorr = int(exploded.shape[0])
     contagem["percent"] = contagem["count"] / max(1, total_ocorr) * 100
 
+    # Pega apenas o Top N
     top = contagem.head(top_n).copy()
+
     # rótulo bonito (primeira letra maiúscula) — apenas display
     top["emocao_fmt"] = top["emocao"].astype(str).str.strip().str.capitalize()
 
@@ -409,7 +411,7 @@ def app_funcao_emocoes_legenda(base_filtrada: pd.DataFrame, top_n: int = 10):
         orientation="h",
         text=top.apply(lambda r: f"{r['count']} ({r['percent']:.1f}%)", axis=1),
         labels={"count": "Quantidade", "emocao_fmt": "Emoção"},
-        title=f"Top emoções na legenda",
+        title=f"Top {top_n} emoções na legenda",  # Atualizado para refletir o top_n
         color_discrete_sequence=["#213ac7"]
     )
     fig.update_traces(textposition="outside", cliponaxis=False)
@@ -465,6 +467,9 @@ def _contagem_categorias(df: pd.DataFrame, col: str, dedup_por_post: bool = True
         return pd.DataFrame(columns=["categoria", "count"])
     cont = expl.value_counts().reset_index()
     cont.columns = ["categoria", "count"]
+
+    # Remover a categoria "Desconhecido"
+    cont = cont[cont["categoria"].str.strip().str.lower() != "desconhecido"]
     return cont
 
 def _plot_barh_counts(cont: pd.DataFrame, titulo: str, ylab: str):
@@ -472,12 +477,14 @@ def _plot_barh_counts(cont: pd.DataFrame, titulo: str, ylab: str):
     if cont.empty:
         st.info(f"Sem dados para **{titulo}**.")
         return
-    # display: capitaliza e troca '_' por espaço; mantém "Desconhecido"
+    # display: capitaliza e troca '_' por espaço
     cont = cont.copy()
     cont["categoria_fmt"] = cont["categoria"].astype(str).apply(
-        lambda x: "Desconhecido" if x.strip().lower()=="desconhecido"
-        else x.replace("_"," ").strip().capitalize()
+        lambda x: x.replace("_"," ").strip().capitalize()
     )
+    # Remover a categoria "Desconhecido" do gráfico, se ainda existir
+    cont = cont[cont["categoria_fmt"].str.lower() != "desconhecido"]
+
     # ordena para barras horizontais
     cont = cont.sort_values("count", ascending=True)
     fig = px.bar(
@@ -518,17 +525,17 @@ def grafico_ctas_imagem(df: pd.DataFrame, top_n: int | None = None):
 def grafico_topicos_legenda(df: pd.DataFrame, top_n: int | None = None):
     cont = _contagem_categorias(df, "legenda_topicos")
     if top_n: cont = cont.head(top_n)
-    _plot_barh_counts(cont, "Tópicos associados à Legenda", "Tópico (legenda)")
+    _plot_barh_counts(cont, "Top 5 tópicos associados à Legenda", "Tópico (legenda)")
 
 def grafico_gatilhos_legenda(df: pd.DataFrame, top_n: int | None = None):
     cont = _contagem_categorias(df, "legenda_gatilhos")
     if top_n: cont = cont.head(top_n)
-    _plot_barh_counts(cont, "Gatilhos utilizados na Legenda", "Gatilho (legenda)")
+    _plot_barh_counts(cont, "Top 5 gatilhos utilizados na Legenda", "Gatilho (legenda)")
 
 def grafico_ctas_legenda(df: pd.DataFrame, top_n: int | None = None):
     cont = _contagem_categorias(df, "legenda_cta")
     if top_n: cont = cont.head(top_n)
-    _plot_barh_counts(cont, "CTAs utilizados na Legenda", "CTA (legenda)")
+    _plot_barh_counts(cont, "Top 5 CTAs utilizados na Legenda", "CTA (legenda)")
 
 
 

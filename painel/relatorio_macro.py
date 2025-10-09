@@ -32,10 +32,10 @@ def app_relatorio_macro(authenticator):
         app_funcao_conceito_basico_parte02(base_filtrada)
     
     st.subheader("📈 Análises Detalhadas")
-
+    #
     with st.container():
 
-        col1, col2, col3 = st.columns([1,2,2], border=True)
+        col1, col2, col3 = st.columns([1.5,2,2], border=True)
         
         with col1:
             app_funcao_tipo_post(base_filtrada)
