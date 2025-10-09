@@ -13,7 +13,7 @@ def app_relatorio_macro(authenticator):
 
     with st.container():
 
-        col1,col2 = st.columns([19,1])
+        col1,col2 = st.columns([18,1])
         
         with col1:
             st.markdown("# Insights de Performance dos Conteúdos da Farm")

@@ -81,9 +81,9 @@ def app_funcao_conceito_basico_parte01(base_filtrada):
 
 
         # métricas (sem **; use o CSS para negrito)
-        c1.metric("Qtd. de Publicações", total_posts)
-        c2.metric("% de Publicações com Rosto", f"{pct_faces:.1f}%")
-        c3.metric("% de Publicações com Texto na Imagem", f"{pct_prod:.1f}%")
+        c1.metric("Quantidade de publicações", total_posts)
+        c2.metric("Publicações com rosto", f"{pct_faces:.1f}%")
+        c3.metric("Publicações com texto na imagem", f"{pct_prod:.1f}%")
 
 # --- parte 2 ---
 def app_funcao_conceito_basico_parte02(base_filtrada):
@@ -114,10 +114,10 @@ def app_funcao_conceito_basico_parte02(base_filtrada):
         pct_cupons = ((cup_img | cup_leg).mean()*100)
 
         # métricas
-        c1.metric("% Publi. com Menções (@)", f"{pct_mentions:.1f}%")
-        c2.metric("% Publi. com Hashtags", f"{pct_hashtags:.1f}%")
-        c3.metric("% Publi. com Url", f"{pct_urls:.1f}%")
-        c4.metric("% Publi. com Cupons", f"{pct_cupons:.1f}%")
+        c1.metric("Publicações com menção", f"{pct_mentions:.1f}%")
+        c2.metric("Publicações com hashtag", f"{pct_hashtags:.1f}%")
+        c3.metric("Publicações com Url", f"{pct_urls:.1f}%")
+        c4.metric("Publicações Cupons", f"{pct_cupons:.1f}%")
 
 
 
@@ -140,7 +140,7 @@ def app_funcao_tipo_post(base_filtrada):
         y="percent",
         text=counts["percent"].map(lambda v: f"{v:.2f}%"),
         labels={"post_type": "Tipo de Publi.", "percent": "% de publicações"},
-        title="% de publicações pelo tipo de publicação",
+        title="Distribuição de Publicações por Tipo",
         color_discrete_sequence=["#213ac7"],
     )
 
