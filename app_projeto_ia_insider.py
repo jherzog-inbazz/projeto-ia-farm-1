@@ -45,8 +45,7 @@ else:
                 
     # Permissão por tipo de usuário
     usuarios_autorizados = {
-        "inbazz": "inbazz",
-        "farm": "farm"
+        "inbazz": "inbazz"
     }
 
     usuario_tipo = st.session_state.get("email")
